@@ -1,4 +1,4 @@
-# 🎽 Dare XAI – AI Fashion Outfit Recommendation System
+#  AI Fashion Outfit Recommendation System
 
 > A hybrid multi-modal recommendation system built with PyTorch Siamese Networks, ResNet50, DistilBERT, and Gemini LLM — capable of understanding user intent, retrieving compatible outfit items, and explaining recommendations in natural language.
 
