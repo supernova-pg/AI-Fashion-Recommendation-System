@@ -136,8 +136,47 @@ def query_gemini_api(prompt: str, api_key: str) -> str:
     except Exception as e:
         return f"Request failed: {e}"
 
+# Fashion Query Validator — rejects off-topic inputs
+FASHION_KEYWORDS = [
+    "outfit", "wear", "wearing", "cloth", "dress", "shirt", "pant", "trouser",
+    "jeans", "shoe", "footwear", "sandal", "sneaker", "heel", "boot", "loafer",
+    "jacket", "blazer", "coat", "saree", "kurta", "lehenga", "sherwani",
+    "t-shirt", "tshirt", "top", "skirt", "shorts", "suit", "ethnic", "western",
+    "fashion", "style", "look", "casual", "formal", "party", "wedding", "office",
+    "festive", "sports", "vacation", "beach", "summer", "winter", "occasion",
+    "accessory", "necklace", "watch", "bag", "handbag", "clutch", "sunglasses",
+    "color", "palette", "wardrobe", "attire", "apparel", "ensemble", "combo",
+    "recommendation", "suggest", "pair", "match", "coordinate", "outfit for",
+    "what to", "what should i", "what can i", "help me with"
+]
 
-# LLM Parser for Conversational Assistant
+def is_fashion_query(query: str, api_key: str) -> bool:
+    """Return True if the query is fashion/outfit related, False otherwise."""
+    q_lower = query.lower().strip()
+    
+    # Very short or empty
+    if len(q_lower) < 3:
+        return False
+
+    # Use Gemini for accurate intent classification if API key is available
+    if api_key:
+        validation_prompt = f"""
+You are a strict fashion assistant. Determine if the following user query is related to fashion, clothing, outfits, styling, accessories, or shopping for clothes.
+
+User query: "{query}"
+
+Respond with ONLY a single word: "YES" if it is fashion-related, or "NO" if it is not.
+Examples of fashion-related: "I need a party outfit", "suggest shoes for a wedding", "what to wear to the office"
+Examples of NOT fashion-related: "what is 2+2", "write a poem", "who is the president", "tell me a joke"
+
+Answer:"""
+        result = query_gemini_api(validation_prompt, api_key).strip().upper()
+        return result.startswith("YES")
+
+    # Fallback: keyword-based check
+    return any(kw in q_lower for kw in FASHION_KEYWORDS)
+
+
 def parse_query_with_gemini(query: str, products_list: list[dict], api_key: str) -> dict:
     products_summary = "\n".join([
         f"- ID: {p['id']} | Name: {p['name']} | Category: {p['category_label']} | Occasion: {p['occasion']} | Gender: {p['gender']}"
@@ -437,40 +476,68 @@ with tab2:
                 st.markdown(f"**Total Price:** INR {outfit['total_price_inr']}")
 
     # User Input
-    if prompt := st.chat_input("Tell me what outfit you need:"):
+    if prompt := st.chat_input("Tell me what outfit you need (e.g. 'I need a formal look for a wedding'):"):
         # Display user message
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # Process Response
-        with st.chat_message("assistant"):
-            with st.spinner("Stylist is thinking..."):
-                parsed_params = None
-                
-                if api_key:
-                    # Parse using Gemini
-                    products_list = recommender.products_df.to_dict(orient="records")
-                    parsed_params = parse_query_with_gemini(prompt, products_list, api_key)
-                
-                if parsed_params is None:
-                    # Fallback to local heuristic
-                    parsed_params = parse_query_local(prompt, recommender.products_df, gender)
+        # ── Input Guard: Reject off-topic queries ──────────────────────────
+        with st.spinner("Checking your request..."):
+            is_valid = is_fashion_query(prompt, api_key)
 
-                det_gender = parsed_params.get("detected_gender", gender.lower())
-                det_occasion = parsed_params.get("detected_occasion", occasion.lower())
-                anchor_id = parsed_params.get("anchor_product_id")
-                
-                # Recommend full outfit
-                outfit = recommender.recommend_full_outfit(
-                    anchor_id=anchor_id,
-                    gender_filter=det_gender,
-                    occasion_filter=det_occasion
-                )
-                
-                # Generate rationale
-                if api_key:
-                    rationale_prompt = f"""
+        if not is_valid:
+            with st.chat_message("assistant"):
+                st.markdown("""
+<div style="background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.05));
+            border-left: 4px solid #ef4444;
+            border-radius: 0 10px 10px 0;
+            padding: 16px 20px;
+            margin: 4px 0;">
+<strong>❌ Invalid Query</strong><br><br>
+I'm a fashion stylist AI — I can only help with outfit recommendations, styling advice, and clothing suggestions.
+<br><br>
+<em>Try something like:</em>
+<ul>
+  <li>"I need a formal outfit for a job interview"</li>
+  <li>"Suggest a party look for women"</li>
+  <li>"What should I wear to a beach vacation?"</li>
+</ul>
+</div>
+""", unsafe_allow_html=True)
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": "❌ **Invalid Query** — I only handle fashion and outfit recommendations. Please ask me about clothing, outfits, or styling!"
+            })
+        else:
+            # Process Response
+            with st.chat_message("assistant"):
+                with st.spinner("Stylist is thinking..."):
+                    parsed_params = None
+                    
+                    if api_key:
+                        # Parse using Gemini
+                        products_list = recommender.products_df.to_dict(orient="records")
+                        parsed_params = parse_query_with_gemini(prompt, products_list, api_key)
+                    
+                    if parsed_params is None:
+                        # Fallback to local heuristic
+                        parsed_params = parse_query_local(prompt, recommender.products_df, gender)
+
+                    det_gender = parsed_params.get("detected_gender", gender.lower())
+                    det_occasion = parsed_params.get("detected_occasion", occasion.lower())
+                    anchor_id = parsed_params.get("anchor_product_id")
+                    
+                    # Recommend full outfit
+                    outfit = recommender.recommend_full_outfit(
+                        anchor_id=anchor_id,
+                        gender_filter=det_gender,
+                        occasion_filter=det_occasion
+                    )
+                    
+                    # Generate rationale
+                    if api_key:
+                        rationale_prompt = f"""
 You are an AI Stylist. The user asked: "{prompt}".
 We selected this Anchor item based on their request: {outfit['anchor']['name']} by {outfit['anchor']['brand']}.
 Our AI model recommended these compatible items to complete the outfit: {', '.join([item['name'] + ' by ' + item['brand'] for item in outfit['outfit_items']])}.
@@ -478,49 +545,50 @@ Our AI model recommended these compatible items to complete the outfit: {', '.jo
 Write a stylish, engaging, and professional paragraph explaining why this EXACT combination works perfectly for a {det_occasion} occasion.
 Do not recommend or mention items that are not in this list. Focus on color coordination, suitability, and stylistic harmony of the provided items.
 """
-                    rationale = query_gemini_api(rationale_prompt, api_key)
-                else:
-                    rationale = generate_stylist_rationale_local(outfit, det_occasion, style_preference)
-                
-                response_text = (
-                    f"### Stylist Recommendations for your request:\n"
-                    f"**Context**: {det_gender.capitalize()} | Occasion: {det_occasion.capitalize()}\n\n"
-                    f"{rationale}\n\n"
-                    f"Here is the compatible outfit combo built for you:"
-                )
-                st.markdown(response_text)
-                
-                # Render visual columns
-                cols = st.columns(len(outfit["outfit_items"]) + 1)
-                
-                # Anchor
-                with cols[0]:
-                    st.markdown(f"<div class='product-card'>", unsafe_allow_html=True)
-                    img_path = Path(outfit["anchor"]["image"])
-                    if img_path.exists():
-                        st.image(str(img_path), use_container_width=True)
-                    st.markdown(f"<div class='product-title'>{outfit['anchor']['name']}</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='product-price'>INR {outfit['anchor']['price_inr']}</div>", unsafe_allow_html=True)
-                    st.caption("Anchor")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Recommendations
-                for idx, item in enumerate(outfit["outfit_items"]):
-                    with cols[idx + 1]:
+                        rationale = query_gemini_api(rationale_prompt, api_key)
+                    else:
+                        rationale = generate_stylist_rationale_local(outfit, det_occasion, style_preference)
+                    
+                    response_text = (
+                        f"### Stylist Recommendations for your request:\n"
+                        f"**Context**: {det_gender.capitalize()} | Occasion: {det_occasion.capitalize()}\n\n"
+                        f"{rationale}\n\n"
+                        f"Here is the compatible outfit combo built for you:"
+                    )
+                    st.markdown(response_text)
+                    
+                    # Render visual columns
+                    cols = st.columns(len(outfit["outfit_items"]) + 1)
+                    
+                    # Anchor
+                    with cols[0]:
                         st.markdown(f"<div class='product-card'>", unsafe_allow_html=True)
-                        img_path = Path(item["image"])
+                        img_path = Path(outfit["anchor"]["image"])
                         if img_path.exists():
                             st.image(str(img_path), use_container_width=True)
-                        st.markdown(f"<div class='product-title'>{item['name']}</div>", unsafe_allow_html=True)
-                        st.markdown(f"<div class='product-price'>INR {item['price_inr']}</div>", unsafe_allow_html=True)
-                        st.caption(f"Compatible {recommender.get_high_level_category(pd.Series(item))}")
+                        st.markdown(f"<div class='product-title'>{outfit['anchor']['name']}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div class='product-price'>INR {outfit['anchor']['price_inr']}</div>", unsafe_allow_html=True)
+                        st.caption("Anchor")
                         st.markdown("</div>", unsafe_allow_html=True)
-                
-                st.markdown(f"**Total Price:** INR {outfit['total_price_inr']}")
-                
-                # Save assistant message including the outfit dict for re-rendering
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response_text,
-                    "outfit": outfit
-                })
+                    
+                    # Recommendations
+                    for idx, item in enumerate(outfit["outfit_items"]):
+                        with cols[idx + 1]:
+                            st.markdown(f"<div class='product-card'>", unsafe_allow_html=True)
+                            img_path = Path(item["image"])
+                            if img_path.exists():
+                                st.image(str(img_path), use_container_width=True)
+                            st.markdown(f"<div class='product-title'>{item['name']}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div class='product-price'>INR {item['price_inr']}</div>", unsafe_allow_html=True)
+                            st.caption(f"Compatible {recommender.get_high_level_category(pd.Series(item))}")
+                            st.markdown("</div>", unsafe_allow_html=True)
+                    
+                    st.markdown(f"**Total Price:** INR {outfit['total_price_inr']}")
+                    
+                    # Save assistant message including the outfit dict for re-rendering
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response_text,
+                        "outfit": outfit
+                    })
+
