@@ -2,7 +2,7 @@
 
 > A hybrid multi-modal recommendation system built with PyTorch Siamese Networks, ResNet50, DistilBERT, and Gemini LLM — capable of understanding user intent, retrieving compatible outfit items, and explaining recommendations in natural language.
 
-![Architecture](architecture_diagram.png)
+![Architecture](docs/architecture_diagram.png)
 
 ---
 
@@ -74,7 +74,7 @@ Gemini LLM ─── Stylist Rationale (explains the exact recommended items)
 Streamlit Dashboard (Visual Grid + Chat Interface)
 ```
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for full component-level documentation.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for full component-level documentation.
 
 ---
 
@@ -97,32 +97,37 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for full component-level documentation.
 ## Project Structure
 
 ```
-ML-TASK/
-├── app.py                  # Streamlit web application (UI + chat)
-├── data_loader.py          # Dataset loading, feature extraction (ResNet50 + DistilBERT)
-├── models.py               # Siamese Network architecture (PyTorch)
-├── train.py                # Training pipeline with 25-fold LOOCV
-├── recommendation_engine.py# Outfit compilation + similarity search
-├── visualize.py            # Loss curves, t-SNE embedding plots
+AI-Fashion-Recommendation-System/
 │
-├── products.csv            # 68 product metadata records
-├── outfits.csv             # 25 ground-truth curated outfits
-├── curated25.xlsx          # Original styled outfits spreadsheet
+├── app.py                      # Streamlit web application (UI + chat interface)
+├── data_loader.py              # Dataset loading + ResNet50/DistilBERT feature extraction
+├── models.py                   # Siamese Network architecture (PyTorch)
+├── train.py                    # Training pipeline with 25-fold LOOCV
+├── recommendation_engine.py    # Outfit compilation + similarity search engine
+├── visualize.py                # Loss curves, t-SNE embedding visualizations
 │
-├── best_model.pth          # Trained Siamese Network weights
-├── raw_embeddings.pkl      # Pre-computed 2816-dim product embeddings
-├── train_history.pkl       # Training loss history
+├── products.csv                # 68 product metadata records
+├── outfits.csv                 # 25 ground-truth expert-curated outfits
+├── images/                     # Product image files (Ajio, Myntra, Nykaa)
+│   ├── ajio/
+│   ├── myntra/
+│   └── nykaa/
 │
-├── loss_curves.png         # Training/validation loss visualization
-├── tsne_embeddings.png     # t-SNE cluster visualization of embedding space
-├── architecture_diagram.png# System architecture diagram
+├── best_model.pth              # Trained Siamese Network weights
+├── raw_embeddings.pkl          # Pre-computed 2816-dim product embeddings
 │
-├── requirements.txt        # Python dependencies
-├── experiment_log.md       # Training runs and metrics log
-├── ARCHITECTURE.md         # Detailed component documentation
-├── DATASET_ANALYSIS.md     # Dataset analysis and observations
-└── PROBLEM_STATEMENT.md    # Original assignment brief
+├── requirements.txt            # Python dependencies
+├── .streamlit/
+│   └── config.toml             # Streamlit dark theme config
+│
+└── docs/
+    ├── ARCHITECTURE.md         # Detailed component architecture documentation
+    ├── DATASET_ANALYSIS.md     # Dataset structure, stats, and challenges
+    ├── architecture_diagram.png# System architecture diagram
+    ├── loss_curves.png         # Training/validation loss visualization
+    └── tsne_embeddings.png     # t-SNE embedding cluster visualization
 ```
+
 
 ---
 
@@ -210,7 +215,7 @@ Open your browser at: **http://localhost:8501**
 
 ## Dataset Analysis
 
-See [`DATASET_ANALYSIS.md`](DATASET_ANALYSIS.md) for full analysis.
+See [`docs/DATASET_ANALYSIS.md`](docs/DATASET_ANALYSIS.md) for full analysis.
 
 **Quick Summary:**
 - **68 products** across 47 unique subcategories
@@ -244,7 +249,7 @@ See [`DATASET_ANALYSIS.md`](DATASET_ANALYSIS.md) for full analysis.
 - The model with the lowest validation loss is saved as `best_model.pth`
 - Visual evaluation via t-SNE: compatible items cluster together in embedding space
 
-See `loss_curves.png` and `tsne_embeddings.png` for visual evidence.
+See `docs/loss_curves.png` and `docs/tsne_embeddings.png` for visual evidence.
 
 ---
 

@@ -6,9 +6,11 @@ __pycache__/
 .venv/
 venv/
 
-# Training artifacts — keep model weights & embeddings so Streamlit Cloud can load them
-# best_model.pth      ← ~6 MB, needed at runtime, committed to repo
-# raw_embeddings.pkl  ← ~786 KB, needed at runtime, committed to repo
+# Internal dev files
+experiment_log.md
+train_history.pkl
+curated25.xlsx
+PROBLEM_STATEMENT.md
 
 # Jupyter
 .ipynb_checkpoints/
