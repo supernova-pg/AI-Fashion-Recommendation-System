@@ -1,124 +1,261 @@
-# Dare XAI – Machine Learning & AI Engineer Intern Assignment
-## Assignment: AI Fashion Outfit Recommendation System
+# 🎽 Dare XAI – AI Fashion Outfit Recommendation System
 
-Welcome to the **Dare XAI Fashion Outfit Recommendation System** dataset! This package contains a curated subset of fashion items and pre-styled outfits designed to evaluate your capabilities in computer vision, recommendation systems, search retrieval, and natural language understanding.
+> A hybrid multi-modal recommendation system built with PyTorch Siamese Networks, ResNet50, DistilBERT, and Gemini LLM — capable of understanding user intent, retrieving compatible outfit items, and explaining recommendations in natural language.
+
+![Architecture](architecture_diagram.png)
 
 ---
 
-## 📁 Dataset Directory Structure
+## 📌 Table of Contents
+- [Project Overview](#project-overview)
+- [System Architecture](#system-architecture)
+- [ML Approach](#ml-approach)
+- [Project Structure](#project-structure)
+- [Setup & Installation](#setup--installation)
+- [How to Run](#how-to-run)
+- [Features](#features)
+- [Dataset Analysis](#dataset-analysis)
+- [Training Details](#training-details)
+- [Evaluation](#evaluation)
+- [Future Improvements](#future-improvements)
 
-This curated dataset is organized as follows:
-```text
-NEWDATASET/
-├── README.md               # This documentation file
+---
+
+## Project Overview
+
+This system provides end-to-end AI-powered fashion recommendations based on:
+- **User profile** (gender, age, style preference, occasion)
+- **Visual compatibility** of fashion items (via image embeddings)
+- **Textual metadata** (product descriptions, tags, category)
+- **Natural language queries** (conversational chat interface)
+
+**Example interactions:**
+| User Query | System Output |
+|---|---|
+| White formal shirt | Navy Chinos + Brown Loafers + Silver Watch |
+| "I need an outfit for a business meeting" | Curated complete office outfit with stylist rationale |
+| "Something stylish for a beach vacation" | Linen shirt + Shorts + Sandals + Sunglasses |
+
+---
+
+## System Architecture
+
+```
+User Input (Query / Profile / Anchor Product)
+         │
+         ▼
+Gemini LLM ─── Intent Parsing (gender, occasion, anchor product ID)
+         │
+         ▼
+┌─────────────────────────────────────────────┐
+│           FEATURE EXTRACTION                │
+│  ResNet50 (2048-dim)  +  DistilBERT (768-dim) │
+│  ──────── Frozen Pre-trained Encoders ──────  │
+│           Concat → 2816-dim embedding        │
+└─────────────────────────────────────────────┘
+         │
+         ▼
+Siamese Network Encoder
+→ Projects 2816-dim → 256-dim compatibility space
+→ Trained via Contrastive Loss (25-fold LOOCV)
+         │
+         ▼
+Euclidean Distance Ranking
+→ Filter: Category | Gender | Occasion
+→ Returns top-1 per slot (Topwear, Bottomwear, Footwear, Accessories)
+         │
+         ▼
+Complete Outfit (4-6 items)
+         │
+         ▼
+Gemini LLM ─── Stylist Rationale (explains the exact recommended items)
+         │
+         ▼
+Streamlit Dashboard (Visual Grid + Chat Interface)
+```
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for full component-level documentation.
+
+---
+
+## ML Approach
+
+| Component | Technology | Purpose |
+|---|---|---|
+| Image Encoder | ResNet50 (pretrained, frozen) | 2048-dim visual feature extraction |
+| Text Encoder | DistilBERT (pretrained, frozen) | 768-dim semantic feature extraction |
+| Fusion | Concatenation → 2816-dim | Multi-modal embedding |
+| Compatibility Model | Siamese Network (PyTorch) | Pairwise compatibility scoring |
+| Training Strategy | 25-fold Leave-One-Out CV | Prevents overfitting on small dataset |
+| Loss Function | Contrastive Loss | Pulls compatible pairs together |
+| Similarity Search | Euclidean Distance | Nearest-neighbor retrieval |
+| LLM | Gemini 2.5 Flash API | Query parsing + rationale generation |
+| UI | Streamlit | Interactive web dashboard |
+
+---
+
+## Project Structure
+
+```
+ML-TASK/
+├── app.py                  # Streamlit web application (UI + chat)
+├── data_loader.py          # Dataset loading, feature extraction (ResNet50 + DistilBERT)
+├── models.py               # Siamese Network architecture (PyTorch)
+├── train.py                # Training pipeline with 25-fold LOOCV
+├── recommendation_engine.py# Outfit compilation + similarity search
+├── visualize.py            # Loss curves, t-SNE embedding plots
+│
+├── products.csv            # 68 product metadata records
+├── outfits.csv             # 25 ground-truth curated outfits
 ├── curated25.xlsx          # Original styled outfits spreadsheet
-├── outfits.csv             # Cleaned outfit mapping of the 25 curated outfits
-├── products.csv            # Detailed metadata for the 68 unique products used in the outfits
-└── images/                 # Product image files matching the product IDs
-    ├── ajio/               # Images sourced from Ajio
-    ├── myntra/             # Images sourced from Myntra
-    └── nykaa/              # Images sourced from Nykaa
+│
+├── best_model.pth          # Trained Siamese Network weights
+├── raw_embeddings.pkl      # Pre-computed 2816-dim product embeddings
+├── train_history.pkl       # Training loss history
+│
+├── loss_curves.png         # Training/validation loss visualization
+├── tsne_embeddings.png     # t-SNE cluster visualization of embedding space
+├── architecture_diagram.png# System architecture diagram
+│
+├── requirements.txt        # Python dependencies
+├── experiment_log.md       # Training runs and metrics log
+├── ARCHITECTURE.md         # Detailed component documentation
+├── DATASET_ANALYSIS.md     # Dataset analysis and observations
+└── PROBLEM_STATEMENT.md    # Original assignment brief
 ```
 
 ---
 
-## 📊 Data Files Description
+## Setup & Installation
 
-### 1. `products.csv`
-This file contains the core metadata for the 68 unique fashion items that make up our outfits.
-* **Fields**:
-  * `id`: Unique identifier for the product (e.g., `ajio_703182002`).
-  * `name`: Product title (e.g., `Women Bodycon Midi Length Dress`).
-  * `brand`: Manufacturer or label (e.g., `Fyre Rose`, `Peter England`).
-  * `price_inr`: Retail price in Indian Rupees (INR).
-  * `rating` / `rating_count`: Customer rating statistics.
-  * `gender`: Target gender (`men` / `women`).
-  * `wear_type`: Style category (e.g., `western`, `ethnic`).
-  * `category` & `category_label`: Specific clothing/accessory category (e.g., `formal-shirts`, `heels`, `dresses`).
-  * `occasion`: Intended setting (e.g., `party`, `office`, `casual`).
-  * `tags`: Semicolon-separated tags for retrieval.
-  * `description`: Detailed text description of the product.
-  * `image`: Relative filepath to the product image (e.g., `images/ajio/703182002.jpg`).
+### Prerequisites
+- Python 3.9+
+- pip
 
-### 2. `outfits.csv` (and `curated25.xlsx`)
-This file defines 25 expert-curated complete outfits. You can use this file as ground truth for training, evaluation, or as reference combinations.
-* **Fields**:
-  * `outfit_id`: Unique identifier for the outfit (e.g., `outfit W1`).
-  * `gender` / `wear_type` / `occasion` / `theme`: Categorization context.
-  * `hero` & `hero_id`: The main item in the outfit (e.g., a dress or shirt).
-  * `second` & `second_id`: The complementary item (e.g., trousers/chinos).
-  * `layer` & `layer_id`: Optional layering item (e.g., blazers, jackets).
-  * `footwear` & `footwear_id`: Footwear item.
-  * `accessory_1` & `accessory_1_id` / `accessory_2` & `accessory_2_id`: Optional styling accessories.
-  * `palette`: Main color combination.
-  * `stylist_rationale`: Stylist commentary explaining why this outfit is compatible and fits the theme.
-
----
-
-## 🎯 Assignment & Problem Statement
-
-Your objective is to design and build an intelligent **Recommendation Engine & Chat-based Fashion Assistant** that can understand natural language user requests, retrieve compatible clothing items, compile complete outfits, and explain its reasoning.
-
-### Core Implementation Requirements:
-
-1. **Dataset Analysis & Understanding**:
-   * Inspect the provided metadata and images.
-   * Document categories, palette distributions, and potential challenges (e.g., size of dataset, variety, metadata consistency).
-
-2. **Outfit Compatibility Engine**:
-   * Build an algorithm to determine if items are compatible. Given a single item (e.g., a white formal shirt), the engine should suggest compatible components (e.g., navy trousers and brown loafers).
-   * **Tip**: Use similarity search or learn a pairwise compatibility score using visual/text features.
-
-3. **User & Context-Aware Recommendations**:
-   * Adapt recommendations dynamically based on profile parameters:
-     * **Gender** (e.g., Men / Women)
-     * **Age Group** (e.g., 20s vs. 40s styling)
-     * **Occasion** (e.g., Office, Beach Vacation, Wedding, Party)
-     * **Style Preferences** (e.g., Formal, Smart Casual)
-
-4. **Conversational Fashion Assistant (Natural Language Interface)**:
-   * Build a chat interface allowing users to make requests in plain text (e.g., *"I need an outfit for a business meeting"* or *"Suggest something stylish for a summer beach vacation"*).
-   * The assistant should retrieve the items, group them into a complete outfit (Topwear, Bottomwear, Footwear, and optional Accessories/Layers), and display them to the user.
-
-5. **Explainability**:
-   * Every outfit recommendation must include a reasoned explanation (e.g., *"Beige chinos pair well with a navy blazer because they provide classic contrast while maintaining a polished smart-casual appearance for your office meeting."*).
-
----
-
-## 🛠️ Recommended Technical Approach
-
-We evaluate technical depth and systemic engineering choices. Consider incorporating:
-* **Computer Vision & Multi-modal Embeddings**: Use models like **CLIP**, **FashionCLIP**, or **SigLIP** to generate embeddings from both product images and descriptions.
-* **Vector Search / Retrieval**: Store product embeddings in a vector database (e.g., **Qdrant**, **Chroma**, **FAISS**) to execute fast similarity and hybrid searches.
-* **LLM Integration**: Use LLMs (e.g., Gemini, GPT, Claude) to parse user intent from conversational chat, structure queries, and generate final personalized reasoning.
-* **Advanced Methods (Bonus)**: Graph-based recommendations (representing outfits as nodes/edges) or trained compatibility classification models.
-
----
-
-## 🚀 Quick Start Code (Python)
-
-You can load and start exploring this dataset using the following snippet:
-
-```python
-import pandas as pd
-import os
-
-# Set paths
-DATASET_DIR = "./"  # Update path if run from elsewhere
-products_df = pd.read_csv(os.path.join(DATASET_DIR, "products.csv"))
-outfits_df = pd.read_csv(os.path.join(DATASET_DIR, "outfits.csv"))
-
-print(f"Loaded {len(products_df)} products.")
-print(f"Loaded {len(outfits_df)} curated outfits.")
-
-# Example: Display first outfit
-first_outfit = outfits_df.iloc[0]
-print(f"\nOutfit ID: {first_outfit['outfit_id']} ({first_outfit['theme']})")
-print(f"Hero Item: {first_outfit['hero']} (ID: {first_outfit['hero_id']})")
-print(f"Footwear: {first_outfit['footwear']} (ID: {first_outfit['footwear_id']})")
-print(f"Rationale: {first_outfit['stylist_rationale']}")
+### Step 1: Clone the Repository
+```bash
+git clone https://github.com/YOUR_USERNAME/ML-TASK.git
+cd ML-TASK
 ```
 
+### Step 2: Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+> **Note**: PyTorch with CUDA is recommended for faster feature extraction. The system will fall back to CPU automatically.
+
+### Step 3: (Optional) Set Gemini API Key
+For live LLM-powered intent parsing and stylist rationale generation:
+```bash
+# Windows (PowerShell)
+$env:GEMINI_API_KEY="your-gemini-api-key-here"
+
+# Linux / macOS
+export GEMINI_API_KEY="your-gemini-api-key-here"
+```
+Get a free API key at: https://aistudio.google.com/
+
 ---
-*Good luck with the assignment! We look forward to seeing your creative and technical solutions.*
-# ML-Intern-Task
+
+## How to Run
+
+### Step 1: Extract Embeddings & Train the Model
+```bash
+python train.py
+```
+This will:
+1. Load all 68 product images and metadata
+2. Extract ResNet50 + DistilBERT features → save `raw_embeddings.pkl`
+3. Generate compatible/incompatible training pairs from 25 outfits
+4. Train a Siamese Network with 25-fold LOOCV → save `best_model.pth`
+5. Plot training curves → save `loss_curves.png`
+
+> ⏱️ Expected time: ~5–15 min (CPU) | ~2–5 min (GPU)
+
+### Step 2: Generate Visualizations
+```bash
+python visualize.py
+```
+Generates `tsne_embeddings.png` showing how the learned embedding space clusters compatible items.
+
+### Step 3: Launch the Web App
+```bash
+python -m streamlit run app.py
+```
+Open your browser at: **http://localhost:8501**
+
+---
+
+## Features
+
+### 🎯 Outfit Builder (Tab 1)
+- Select any anchor product (filtered by gender preference)
+- Click **"Generate Compatible Outfit"**
+- AI recommends Topwear + Bottomwear + Footwear + Accessories
+- Stylist commentary explains the color coordination and occasion suitability
+
+### 💬 Conversational Assistant (Tab 2)
+- Type natural language requests (e.g., *"I need a formal look for a wedding"*)
+- Gemini LLM parses the intent → Siamese Network retrieves compatible items
+- Visual outfit grid + professional stylist rationale generated
+
+### 🧠 Explainability
+- Every recommendation includes detailed reasoning explaining:
+  - Color palette harmony
+  - Occasion suitability
+  - Stylistic cohesion of the complete outfit
+
+---
+
+## Dataset Analysis
+
+See [`DATASET_ANALYSIS.md`](DATASET_ANALYSIS.md) for full analysis.
+
+**Quick Summary:**
+- **68 products** across 47 unique subcategories
+- **25 expert-curated outfits** (ground truth compatibility data)
+- Sourced from: Ajio, Myntra, Nykaa
+- Categories: Topwear, Bottomwear, Footwear, Accessories, One-Piece/Sets, Layering
+- Genders: Men (34), Women (34)
+- Occasions: Office, Wedding, Party, Casual, Festive, Sports, Vacation
+
+---
+
+## Training Details
+
+| Parameter | Value |
+|---|---|
+| Model | Siamese Network |
+| Input Dim | 2816 (ResNet50 2048 + DistilBERT 768) |
+| Embedding Dim | 256 |
+| Training Strategy | 25-fold Leave-One-Out Cross-Validation |
+| Loss | Contrastive Loss (margin=1.0) |
+| Optimizer | Adam (lr=1e-3) |
+| Epochs per fold | 30 |
+| Batch Size | 16 |
+| Regularization | Dropout (0.3), Weight Decay (1e-4) |
+
+---
+
+## Evaluation
+
+- **Approach**: 25-fold LOOCV — each fold holds out one outfit as test set
+- The model with the lowest validation loss is saved as `best_model.pth`
+- Visual evaluation via t-SNE: compatible items cluster together in embedding space
+
+See `loss_curves.png` and `tsne_embeddings.png` for visual evidence.
+
+---
+
+## Future Improvements
+
+1. **FAISS/Qdrant Vector DB** — Replace brute-force Euclidean search with ANN index for scalability
+2. **FashionCLIP / CLIP** — Replace ResNet50+DistilBERT with a fashion-specific CLIP model for better multimodal alignment
+3. **Graph-based Recommendations** — Model outfit compatibility as a knowledge graph (items = nodes, compatibility = edges)
+4. **User Feedback Loop** — Incorporate thumbs up/down signals to continuously improve compatibility scores
+5. **Larger Dataset** — Scale to Myntra/Ajio full catalog (millions of items) with proper sampling
+
+---
+
+*Developed for the Dare XAI ML & AI Engineer Intern Assignment.*
